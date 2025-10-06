@@ -1,6 +1,7 @@
 package main
 
 import (
+	"backend/extra/newsse"
 	"backend/internal/app"
 	"backend/internal/infra/client"
 	"backend/internal/infra/repo"
@@ -11,7 +12,6 @@ import (
 	"time"
 
 	"github.com/V4T54L/goship/pkg/goship/server"
-	"github.com/V4T54L/goship/pkg/goship/sse"
 	"github.com/V4T54L/goship/pkg/goship/ws"
 	"github.com/go-chi/chi/v5"
 )
@@ -42,7 +42,7 @@ func main() {
 	// Start log generation/simulation
 	_ = uc.Start(ctx)
 
-	r.Get("/sse", sse.Handler(func(w sse.Writer, r *http.Request) error {
+	r.Get("/sse", newsse.Handler(func(w newsse.Writer, r *http.Request) error {
 		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
 
@@ -89,6 +89,17 @@ func main() {
 
 		log.Println("Client disconnected")
 	}))
+
+	// Serve static frontend from ./web/
+	fs := http.FileServer(http.Dir("./web"))
+
+	// Serve actual static files (e.g. JS, CSS, assets)
+	r.Handle("/static/*", http.StripPrefix("/static/", fs))
+
+	// Catch-all route for SPA (must be last)
+	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "./web/index.html")
+	})
 
 	// ---
 

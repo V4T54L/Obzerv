@@ -39,10 +39,14 @@ func (b *Broadcaster) RemoveClient(id int) {
 
 func (b *Broadcaster) Broadcast(event string, data []byte) {
 	b.mu.RLock()
-	defer b.mu.RUnlock()
+	clients := make(map[int]domain.BroadcastClient, len(b.clients))
+	for id, c := range b.clients {
+		clients[id] = c
+	}
+	b.mu.RUnlock()
 
-	for id, client := range b.clients {
-		if err := client.Send(event, data); err != nil {
+	for id, c := range clients {
+		if err := c.Send(event, data); err != nil {
 			log.Printf("Broadcast error: %v (removing client %d)", err, id)
 			go b.RemoveClient(id)
 		}

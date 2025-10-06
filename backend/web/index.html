@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Obzerv Logs</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gray-100 text-gray-800 font-sans">
+    <div class="max-w-6xl mx-auto py-8">
+      <h1 class="text-3xl font-bold mb-6">📋 Obzerv Log Stream</h1>
+
+      <div class="flex gap-4 mb-6">
+        <button
+          id="sseBtn"
+          class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+        >
+          Connect via SSE
+        </button>
+        <button
+          id="wsBtn"
+          class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded"
+        >
+          Connect via WebSocket
+        </button>
+      </div>
+
+      <div class="overflow-x-auto border rounded shadow bg-white">
+        <table class="min-w-full table-auto">
+          <thead class="bg-gray-200">
+            <tr>
+              <th class="px-4 py-2 text-left">#</th>
+              <th class="px-4 py-2 text-left">Timestamp</th>
+              <th class="px-4 py-2 text-left">Level</th>
+              <th class="px-4 py-2 text-left">Service</th>
+              <th class="px-4 py-2 text-left">Message</th>
+            </tr>
+          </thead>
+          <tbody id="logTableBody">
+            <!-- Logs will appear here -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <script>
+      const logTableBody = document.getElementById("logTableBody");
+      let logCount = 0;
+
+      function parseLog(logString) {
+        const parts = logString.split(",").map((p) => p.trim());
+        return {
+          timestamp: (parts[0] || "-").trim(),
+          level: (parts[1] || "-").trim(),
+          service: (parts[2] || "-").trim(),
+          message: parts.slice(3).join(", ") || "-", // handles commas in message
+        };
+      }
+
+      function addLogRow(log) {
+        const parsed = typeof log === "string" ? parseLog(log) : log;
+        logCount++;
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+        <td class="border px-4 py-2">${logCount}</td>
+        <td class="border px-4 py-2">${parsed.timestamp}</td>
+        <td class="border px-4 py-2">${parsed.level}</td>
+        <td class="border px-4 py-2">${parsed.service}</td>
+        <td class="border px-4 py-2 whitespace-pre-wrap">${parsed.message}</td>
+      `;
+        logTableBody.prepend(tr);
+      }
+
+      function handleLastPage(logs) {
+        logs.forEach((log) => addLogRow(log));
+      }
+
+      // SSE Connection
+      document.getElementById("sseBtn").addEventListener("click", () => {
+        const es = new EventSource("/sse");
+        console.log("SSE connected");
+
+        es.addEventListener("last_page", (e) => {
+          const lines = e.data.trim().split("\n");
+          // lines.forEach((line) => addLogRow(line));
+          handleLastPage(lines);
+        });
+
+        es.addEventListener("log", (e) => {
+          const data = e.data;
+          addLogRow(data);
+        });
+
+        es.onerror = (err) => {
+          console.error("SSE error", err);
+          es.close();
+        };
+      });
+
+      // WebSocket Connection
+      document.getElementById("wsBtn").addEventListener("click", () => {
+        const wsProtocol =
+          window.location.protocol === "https:" ? "wss:" : "ws:";
+        const ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws`);
+        console.log("WebSocket connected");
+
+        ws.onmessage = (event) => {
+          const msg = JSON.parse(event.data);
+          if (msg.type === "last_page") {
+            const logs =
+              typeof msg.data === "string" ? JSON.parse(msg.data) : msg.data;
+            handleLastPage(logs);
+          } else if (msg.type === "log") {
+            const data =
+              typeof msg.data === "string" ? JSON.parse(msg.data) : msg.data;
+            addLogRow(data.log);
+          }
+        };
+
+        ws.onerror = (err) => {
+          console.error("WebSocket error", err);
+          ws.close();
+        };
+      });
+    </script>
+  </body>
+</html>

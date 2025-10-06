@@ -1,24 +1,35 @@
 package client
 
 import (
+	"backend/extra/newsse"
 	"backend/internal/domain"
-
-	"github.com/V4T54L/goship/pkg/goship/sse"
+	"errors"
 )
 
 type sseClient struct {
-	writer sse.Writer
+	writer newsse.Writer
+	done   chan struct{}
 }
 
-func NewSSEClient(writer sse.Writer) domain.BroadcastClient {
-	return &sseClient{writer: writer}
+func NewSSEClient(w newsse.Writer) domain.BroadcastClient {
+	return &sseClient{writer: w, done: make(chan struct{})}
 }
 
 func (c *sseClient) Send(event string, data []byte) error {
-	return c.writer.Event(event, string(data))
+	select {
+	case <-c.done:
+		return errors.New("client closed")
+	default:
+		return c.writer.Event(event, string(data))
+	}
 }
 
 func (c *sseClient) Close() error {
-	// no-op for SSE, we rely on context cancellation
-	return nil
+	select {
+	case <-c.done:
+		return nil
+	default:
+		close(c.done)
+		return c.writer.Close()
+	}
 }
