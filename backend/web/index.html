@@ -112,9 +112,7 @@
               typeof msg.data === "string" ? JSON.parse(msg.data) : msg.data;
             handleLastPage(logs);
           } else if (msg.type === "log") {
-            const data =
-              typeof msg.data === "string" ? JSON.parse(msg.data) : msg.data;
-            addLogRow(data.log);
+            addLogRow(msg.data);
           }
         };
 
